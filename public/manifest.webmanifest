@@ -1,0 +1,13 @@
+{
+  "name": "汽车真实电耗记录",
+  "short_name": "电耗记录",
+  "description": "个人电动汽车真实电耗与用电成本记录工具",
+  "theme_color": "#0fae8e",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "start_url": "./",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

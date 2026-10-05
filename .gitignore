@@ -1,0 +1,34 @@
+# 依赖
+node_modules/
+server/node_modules/
+
+# 环境变量（含 JWT 密钥，切勿提交）
+.env
+.env.local
+.env.*
+
+# SQLite 数据库（运行时生成，含全部用户数据）
+server/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# 前端构建产物（部署前本地或服务器端 build）
+dist/
+
+# 临时目录（历史残留的调试脚本已清理）
+tmp/
+
+# 早期联调脚本（打 localhost:3000，已废弃）
+server/test_*.mjs
+server/verify_*.mjs
+
+# 日志
+*.log
+npm-debug.log*
+
+# 编辑器与系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

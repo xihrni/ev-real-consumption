@@ -1,0 +1,24 @@
+# 统一换行符，避免 Windows 开发机把 CRLF 提交进仓库。
+# Docker 构建上下文里若混入 CRLF，shell 脚本与 Dockerfile 会出问题。
+* text=auto eol=lf
+
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.js text eol=lf
+*.ts text eol=lf
+*.vue text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.cjs text eol=lf
+*.mjs text eol=lf
+
+# 二进制文件不做换行转换
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.sqlite binary
+*.svg text eol=lf
