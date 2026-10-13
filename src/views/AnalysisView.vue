@@ -4,8 +4,8 @@ import { useAppStore } from '../store/useAppStore'
 import type { Segment } from '../types'
 import BaseChart from '../components/BaseChart.vue'
 import { exportMonthlyCsv } from '../utils/exporters'
-import { round } from '../utils/format'
-import { PieChart, CalendarDays, Home, Zap, Download, TrendingUp } from 'lucide-vue-next'
+import { round, fmtDateShort } from '../utils/format'
+import { PieChart, CalendarDays, TrendingUp, Activity, Gauge, Ruler } from 'lucide-vue-next'
 
 const store = useAppStore()
 
@@ -17,6 +17,209 @@ const rows = computed(() => {
   const { segs, sorted } = store.computed
   return sorted.map((s, i) => ({ s, seg: segs[i] as Segment }))
 })
+
+/** 仅数据齐全（ok）的段，供单次充电分析使用 */
+const okSegs = computed(() =>
+  rows.value
+    .filter((r) => r.seg && r.seg.status === 'ok')
+    .map((r) => ({
+      label: r.seg.label,
+      dateShort: fmtDateShort(r.s.ts),
+      dateFull: (r.s.ts || '').replace('T', ' '),
+      dM: r.seg.dM ?? 0,
+      real: r.seg.real ?? null,
+      disp: r.seg.disp ?? null,
+      price: r.seg.price ?? null,
+      power: r.seg.power ?? null
+    }))
+)
+
+/** 真实电耗的均值 / 标准差 / 极值 —— 散点图的参照基准 */
+const realStats = computed(() => {
+  const vals = okSegs.value.map((x) => x.real).filter((v): v is number => v != null)
+  if (!vals.length) return null
+  const n = vals.length
+  const mean = vals.reduce((a, b) => a + b, 0) / n
+  // 总体标准差：这里把已记录的段视为完整总体，不区分样本/总体
+  const sd = Math.sqrt(vals.reduce((a, b) => a + (b - mean) ** 2, 0) / n)
+  return {
+    n,
+    mean: round(mean),
+    sd: round(sd),
+    min: round(Math.min(...vals)),
+    max: round(Math.max(...vals)),
+    lo: round(mean - sd),
+    hi: round(mean + sd)
+  }
+})
+
+/** 图1：单次真实电耗散点 + 均值线 + ±1σ 带 */
+const realScatterOption = computed(() => {
+  const st = realStats.value
+  if (!st) return {}
+  return {
+    grid: { left: 46, right: 18, top: 30, bottom: 26 },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(20,28,24,0.9)',
+      borderWidth: 0,
+      textStyle: { color: '#fff', fontSize: 12 },
+      formatter: (params: { dataIndex: number }[]) => {
+        const d = okSegs.value[params[0]?.dataIndex]
+        if (!d) return ''
+        return `${d.dateFull}<br/>真实电耗 <b>${d.real}</b> kWh/100km<br/>该段里程 ${d.dM} km`
+      }
+    },
+    xAxis: {
+      type: 'category',
+      data: okSegs.value.map((x) => x.dateShort),
+      axisLine: { lineStyle: { color: '#e7ecea' } },
+      axisTick: { show: false },
+      axisLabel: { color: '#93a09a', fontSize: 10 }
+    },
+    yAxis: {
+      type: 'value',
+      // scale: true 让刻度贴合数据范围，而不是一律从 0 起。
+      // 电耗值域在 15~24 之间，从 0 起会把波动压扁成一条直线。
+      scale: true,
+      name: 'kWh/100km',
+      nameTextStyle: { color: '#93a09a', fontSize: 10 },
+      axisLabel: { color: '#93a09a', fontSize: 10 },
+      splitLine: { lineStyle: { color: '#eef2f0' } }
+    },
+    series: [
+      {
+        // 浅色背景带：均值 ± 1 个标准差，超出即视为偏离常态
+        type: 'scatter',
+        data: okSegs.value.map((x) => x.real),
+        symbolSize: 9,
+        itemStyle: { color: '#0fae8e', borderColor: '#fff', borderWidth: 1 },
+        markArea: {
+          silent: true,
+          itemStyle: { color: 'rgba(15,174,142,0.08)' },
+          data: [[{ yAxis: st.lo }, { yAxis: st.hi }]]
+        },
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          lineStyle: { color: '#0a8f74', type: 'dashed', width: 1.5 },
+          label: {
+            formatter: `均值 ${st.mean}`,
+            position: 'insideEndTop',
+            color: '#0a8f74',
+            fontSize: 11
+          },
+          data: [{ yAxis: st.mean }]
+        }
+      }
+    ]
+  }
+})
+
+/** 图2：车显口径电耗（k×100）趋势 —— 反映车机标定是否在漂移 */
+const dispOption = computed(() => {
+  const list = okSegs.value.map((x) => x.disp).filter((v): v is number => v != null)
+  const mean = list.length ? round(list.reduce((a, b) => a + b, 0) / list.length) : null
+  return {
+    grid: { left: 46, right: 18, top: 30, bottom: 26 },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(20,28,24,0.9)',
+      borderWidth: 0,
+      textStyle: { color: '#fff', fontSize: 12 },
+      formatter: (params: { dataIndex: number }[]) => {
+        const d = okSegs.value[params[0]?.dataIndex]
+        if (!d) return ''
+        return `${d.dateFull}<br/>车显口径 <b>${d.disp}</b> kWh/100km<br/>真实口径 ${d.real} kWh/100km`
+      }
+    },
+    xAxis: {
+      type: 'category',
+      data: okSegs.value.map((x) => x.dateShort),
+      boundaryGap: false,
+      axisLine: { lineStyle: { color: '#e7ecea' } },
+      axisTick: { show: false },
+      axisLabel: { color: '#93a09a', fontSize: 10 }
+    },
+    yAxis: {
+      type: 'value',
+      scale: true,
+      name: 'kWh/100km',
+      nameTextStyle: { color: '#93a09a', fontSize: 10 },
+      axisLabel: { color: '#93a09a', fontSize: 10 },
+      splitLine: { lineStyle: { color: '#eef2f0' } }
+    },
+    series: [
+      {
+        name: '车显口径',
+        type: 'line',
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 6,
+        data: okSegs.value.map((x) => x.disp),
+        lineStyle: { width: 2.5, color: '#6366f1' },
+        itemStyle: { color: '#6366f1' },
+        markLine:
+          mean == null
+            ? undefined
+            : {
+                silent: true,
+                symbol: 'none',
+                lineStyle: { color: '#6366f1', type: 'dashed', width: 1, opacity: 0.6 },
+                label: {
+                  formatter: `均值 ${mean}`,
+                  position: 'insideEndTop',
+                  color: '#6366f1',
+                  fontSize: 11
+                },
+                data: [{ yAxis: mean }]
+              }
+      }
+    ]
+  }
+})
+
+/** 图3：电耗 vs 单段里程 */
+const vsDistanceOption = computed(() => ({
+  // bottom 留 42：x 轴需要容纳 轴标签 + 轴标题两行
+  grid: { left: 46, right: 18, top: 24, bottom: 42 },
+  tooltip: {
+    trigger: 'item',
+    backgroundColor: 'rgba(20,28,24,0.9)',
+    borderWidth: 0,
+    textStyle: { color: '#fff', fontSize: 12 },
+    formatter: (p: { dataIndex: number }) => {
+      const d = okSegs.value[p.dataIndex]
+      if (!d) return ''
+      return `${d.dateFull}<br/>该段里程 <b>${d.dM}</b> km<br/>真实电耗 <b>${d.real}</b> kWh/100km`
+    }
+  },
+  xAxis: {
+    type: 'value',
+    name: '该段里程 km',
+    nameLocation: 'middle',
+    nameGap: 26,
+    nameTextStyle: { color: '#93a09a', fontSize: 10 },
+    axisLabel: { color: '#93a09a', fontSize: 10 },
+    splitLine: { lineStyle: { color: '#eef2f0' } }
+  },
+  yAxis: {
+    type: 'value',
+    scale: true,
+    name: 'kWh/100km',
+    nameTextStyle: { color: '#93a09a', fontSize: 10 },
+    axisLabel: { color: '#93a09a', fontSize: 10 },
+    splitLine: { lineStyle: { color: '#eef2f0' } }
+  },
+  series: [
+    {
+      type: 'scatter',
+      data: okSegs.value.map((x) => [x.dM, x.real]),
+      symbolSize: 9,
+      itemStyle: { color: '#0fae8e', borderColor: '#fff', borderWidth: 1 }
+    }
+  ]
+}))
 
 /** A) 家充 / 超充 / 其他 分组统计 */
 const byType = computed(() => {
@@ -132,6 +335,55 @@ function exportMonth() {
 
 <template>
   <div>
+    <!-- 0) 单次充电分析 -->
+    <section class="card">
+      <div class="card-head">
+        <div class="card-title"><Activity :size="17" class="ic ic-brand" />单次充电分析</div>
+        <span v-if="realStats" class="tag">基于 {{ realStats.n }} 段完整记录</span>
+      </div>
+
+      <div v-if="!okSegs.length" class="empty">
+        <div class="big"><Activity :size="30" class="ic" /></div>
+        暂无数据齐全的充电段，无法逐次分析。<br />
+        请在「记录」中补全里程与车显数据后查看。
+      </div>
+
+      <template v-else>
+        <div class="summary-bar" style="margin-top:0;margin-bottom:14px">
+          真实电耗均值 <b>{{ realStats?.mean }}</b> kWh/100km ·
+          标准差 <b>{{ realStats?.sd }}</b> ·
+          区间 <b>{{ realStats?.min }} ~ {{ realStats?.max }}</b> ·
+          常态带 <b>{{ realStats?.lo }} ~ {{ realStats?.hi }}</b>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-block" style="grid-column:1/-1">
+            <div class="chart-title">单次真实电耗（含均值与 ±1σ 常态带）</div>
+            <BaseChart :option="realScatterOption" />
+            <p class="hint-text" style="margin-top:6px">
+              每个点是一次充电对应的真实百公里电耗。落在浅色带内属正常波动；明显偏高的点多为高速 / 重载 / 空调工况，明显偏低则常与短途、或车显读数误差有关，可回查该条记录。
+            </p>
+          </div>
+
+          <div class="chart-block">
+            <div class="chart-title"><Gauge :size="14" class="ic ic-brand" />车显标定漂移（车显口径）</div>
+            <BaseChart :option="dispOption" />
+            <p class="hint-text" style="margin-top:6px">
+              车显口径 = 本次充电度数 ÷ 车显续航增量 × 100，反映车机自己的「电量↔续航」标定。该线整体上移说明车显越来越虚——同样报能跑 100 km，实际要充更多电。
+            </p>
+          </div>
+
+          <div class="chart-block">
+            <div class="chart-title"><Ruler :size="14" class="ic ic-brand" />电耗 vs 单段里程</div>
+            <BaseChart :option="vsDistanceOption" />
+            <p class="hint-text" style="margin-top:6px">
+              横轴是该段实际行驶里程。里程很短的段（点靠左）对车显读数误差最敏感，电耗容易失真，解读时请结合记录一并核对。
+            </p>
+          </div>
+        </div>
+      </template>
+    </section>
+
     <!-- A) 家充 / 超充分组 -->
     <section class="card">
       <div class="card-head">

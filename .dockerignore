@@ -1,9 +1,18 @@
 node_modules
 server/node_modules
 .git
+.gitignore
+.gitattributes
 server/data
 server/.env
 dist
 tmp
 *.log
 .workbuddy
+
+# 测试与 CI 产物：构建镜像时不需要，排除以缩小构建上下文
+tests
+coverage
+.github
+scripts
+vitest.config.ts
