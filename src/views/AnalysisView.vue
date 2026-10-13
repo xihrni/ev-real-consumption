@@ -384,45 +384,42 @@ function exportMonth() {
       </template>
     </section>
 
-    <!-- A) 家充 / 超充分组 -->
-    <section class="card">
+    <!-- A) 家充 / 超充分组：仅当有 ≥2 类数据时才显示。
+         少于 2 类时该分组没有区分度 —— 生产数据曾长期是 ctype 全为 fast
+         （家充 0 条），卡片只剩一根柱子，且实际承担的是「按车辆」而非
+         「按充电类型」的区分，容易误读为"快充这种方式的成本"。
+         详见 docs/14-已知问题.md P13。 -->
+    <section v-if="byType.length >= 2" class="card">
       <div class="card-head">
         <div class="card-title"><PieChart :size="17" class="ic ic-brand" />家充 / 超充分组统计</div>
       </div>
 
-      <div v-if="!byType.length" class="empty">
-        <div class="big"><PieChart :size="30" class="ic" /></div>
-        还没有可用于分组的充电记录。请在「记录」中新增充电记录并选择充电类型（家充 / 超充 / 其他）。
+      <div class="chart-block">
+        <div class="chart-title">各类型平均电价 (元/kWh)</div>
+        <BaseChart :option="typePriceOption" />
+        <p class="hint-text" style="margin-top:6px">
+          平均电价 = 该类型总花费 ÷ 总充电度数。家充通常明显低于超充，可据此评估不同补能方式的成本差异。
+        </p>
       </div>
 
-      <template v-else>
-        <div class="chart-block">
-          <div class="chart-title">各类型平均电价 (元/kWh)</div>
-          <BaseChart :option="typePriceOption" />
-          <p class="hint-text" style="margin-top:6px">
-            平均电价 = 该类型总花费 ÷ 总充电度数。家充通常明显低于超充，可据此评估不同补能方式的成本差异。
-          </p>
+      <div class="rpt-table">
+        <div class="rpt-head">
+          <span>类型</span><span>次数</span><span>度数</span><span>花费</span>
+          <span>里程</span><span>真实电耗</span><span>均价</span><span>电价</span><span>功率</span>
         </div>
-
-        <div class="rpt-table">
-          <div class="rpt-head">
-            <span>类型</span><span>次数</span><span>度数</span><span>花费</span>
-            <span>里程</span><span>真实电耗</span><span>均价</span><span>电价</span><span>功率</span>
-          </div>
-          <div v-for="t in byType" :key="t.key" class="rpt-row">
-            <span><i class="dot" :style="{ background: t.color }"></i>{{ t.label }}</span>
-            <span>{{ t.count }}</span>
-            <span>{{ t.E.toFixed(1) }}</span>
-            <span>{{ t.C }}</span>
-            <span>{{ t.M.toFixed(0) }}</span>
-            <span>{{ t.real != null ? t.real : '—' }}</span>
-            <span>{{ t.price != null ? t.price : '—' }}</span>
-            <span>{{ t.unitPrice != null ? t.unitPrice : '—' }}</span>
-            <span>{{ t.avgPower != null ? t.avgPower : '—' }}</span>
-          </div>
+        <div v-for="t in byType" :key="t.key" class="rpt-row">
+          <span><i class="dot" :style="{ background: t.color }"></i>{{ t.label }}</span>
+          <span>{{ t.count }}</span>
+          <span>{{ t.E.toFixed(1) }}</span>
+          <span>{{ t.C }}</span>
+          <span>{{ t.M.toFixed(0) }}</span>
+          <span>{{ t.real != null ? t.real : '—' }}</span>
+          <span>{{ t.price != null ? t.price : '—' }}</span>
+          <span>{{ t.unitPrice != null ? t.unitPrice : '—' }}</span>
+          <span>{{ t.avgPower != null ? t.avgPower : '—' }}</span>
         </div>
-        <p class="hint-text">真实电耗 / 均价单位分别为 kWh/100km、元/100km；电价单位 元/kWh；功率为平均充电功率 kW。电价按该类型全部充电（含待补全）的 花费÷度数 计算；真实电耗、均价、里程、功率仅统计数据齐全（完整）的段。</p>
-      </template>
+      </div>
+      <p class="hint-text">真实电耗 / 均价单位分别为 kWh/100km、元/100km；电价单位 元/kWh；功率为平均充电功率 kW。电价按该类型全部充电（含待补全）的 花费÷度数 计算；真实电耗、均价、里程、功率仅统计数据齐全（完整）的段。</p>
     </section>
 
     <!-- B) 月度报表 -->
