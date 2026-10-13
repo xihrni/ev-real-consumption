@@ -124,6 +124,7 @@ ev-app/
 │   │
 │   ├── utils/
 │   │   ├── calc.ts            # ★ 测算引擎（123 行，核心）
+│   │   ├── period.ts          # 周期筛选（概览页 / 分析页共用）
 │   │   ├── format.ts          # round/fmtNum（必须 !isFinite）
 │   │   ├── validation.ts      # 前端校验
 │   │   ├── exporters.ts       # JSON/CSV 导出

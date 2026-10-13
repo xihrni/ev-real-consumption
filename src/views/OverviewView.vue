@@ -4,31 +4,15 @@ import { useAppStore } from '../store/useAppStore'
 import { fmtDateShort } from '../utils/format'
 import { segSummary } from '../utils/calc'
 import { round } from '../utils/format'
+import { type Period, PERIOD_OPTS as periodOpts, inPeriod } from '../utils/period'
 import BaseChart from '../components/BaseChart.vue'
 import { BarChart3, TrendingUp, Zap, Coins, Route, Wallet, Clock } from 'lucide-vue-next'
 
 const store = useAppStore()
 defineEmits(['goto'])
 
-type Period = 'all' | '30d' | 'month' | 'lastmonth'
+// 周期筛选逻辑与选项抽到 utils/period.ts，分析页共用同一份
 const period = ref<Period>('all')
-const periodOpts: { key: Period; label: string }[] = [
-  { key: 'all', label: '全部' },
-  { key: '30d', label: '近30天' },
-  { key: 'month', label: '本月' },
-  { key: 'lastmonth', label: '上月' }
-]
-
-function inPeriod(tsStr: string, p: Period): boolean {
-  const d = new Date(tsStr)
-  if (isNaN(d.getTime())) return false
-  const now = new Date()
-  if (p === 'all') return true
-  if (p === '30d') return d.getTime() >= now.getTime() - 30 * 86400000
-  if (p === 'month') return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
-  const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-  return d.getFullYear() === lm.getFullYear() && d.getMonth() === lm.getMonth()
-}
 
 const result = computed(() => store.computed)
 

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useAppStore } from '../store/useAppStore'
 import type { Segment } from '../types'
 import BaseChart from '../components/BaseChart.vue'
 import { exportMonthlyCsv } from '../utils/exporters'
 import { round, fmtDateShort } from '../utils/format'
+import { type Period, PERIOD_OPTS as periodOpts, inPeriod } from '../utils/period'
 import { PieChart, CalendarDays, TrendingUp, Activity, Gauge, Ruler } from 'lucide-vue-next'
 
 const store = useAppStore()
@@ -13,14 +14,21 @@ const CTYPE_ORDER = ['home', 'fast', 'other'] as const
 const CTYPE_LABEL: Record<string, string> = { home: '家充', fast: '超充', other: '其他' }
 const CTYPE_COLOR: Record<string, string> = { home: '#0fae8e', fast: '#f59e0b', other: '#93a09a' }
 
+// 周期筛选作用于「单次充电分析」与「分组统计」；
+// 「月度报表」的维度本身就是月，再按周期筛会自相矛盾（选「本月」只剩一行），故恒为全量。
+const period = ref<Period>('all')
+
 const rows = computed(() => {
   const { segs, sorted } = store.computed
   return sorted.map((s, i) => ({ s, seg: segs[i] as Segment }))
 })
 
+/** 周期内的段（含所有状态），供单次分析与分组统计使用 */
+const periodRows = computed(() => rows.value.filter((r) => inPeriod(r.s.ts, period.value)))
+
 /** 仅数据齐全（ok）的段，供单次充电分析使用 */
 const okSegs = computed(() =>
-  rows.value
+  periodRows.value
     .filter((r) => r.seg && r.seg.status === 'ok')
     .map((r) => ({
       label: r.seg.label,
@@ -221,12 +229,12 @@ const vsDistanceOption = computed(() => ({
   ]
 }))
 
-/** A) 家充 / 超充 / 其他 分组统计 */
+/** A) 家充 / 超充 / 其他 分组统计（受周期筛选影响） */
 const byType = computed(() => {
   const map: Record<string, {
     key: string; label: string; count: number; allE: number; allC: number; okC: number; M: number; Econs: number; segCost: number; powers: number[]
   }> = {}
-  for (const { s, seg } of rows.value) {
+  for (const { s, seg } of periodRows.value) {
     const key = s.ctype || 'other'
     if (!map[key]) map[key] = { key, label: CTYPE_LABEL[key] || '其他', count: 0, allE: 0, allC: 0, okC: 0, M: 0, Econs: 0, segCost: 0, powers: [] }
     const g = map[key]
@@ -282,7 +290,7 @@ const typePriceOption = computed(() => ({
   }]
 }))
 
-/** B) 月度报表 */
+/** B) 月度报表（恒为全量，不受周期筛选影响 —— 它的维度本身就是月） */
 const byMonth = computed(() => {
   const map: Record<string, { month: string; count: number; allE: number; allC: number; okC: number; M: number; Econs: number; segCost: number }> = {}
   for (const { s, seg } of rows.value) {
@@ -342,10 +350,19 @@ function exportMonth() {
         <span v-if="realStats" class="tag">基于 {{ realStats.n }} 段完整记录</span>
       </div>
 
+      <div class="seg-control plain">
+        <button
+          v-for="o in periodOpts"
+          :key="o.key"
+          :class="{ on: period === o.key }"
+          @click="period = o.key"
+        >{{ o.label }}</button>
+      </div>
+
       <div v-if="!okSegs.length" class="empty">
         <div class="big"><Activity :size="30" class="ic" /></div>
-        暂无数据齐全的充电段，无法逐次分析。<br />
-        请在「记录」中补全里程与车显数据后查看。
+        该周期内暂无可用于逐次分析的完整记录。<br />
+        请在「记录」中补全里程与车显数据，或切换上方周期。
       </div>
 
       <template v-else>
@@ -425,7 +442,10 @@ function exportMonth() {
     <!-- B) 月度报表 -->
     <section class="card">
       <div class="card-head">
-        <div class="card-title"><CalendarDays :size="17" class="ic ic-brand" />月度报表</div>
+        <div class="card-title">
+          <CalendarDays :size="17" class="ic ic-brand" />月度报表
+          <span class="card-sub" style="font-weight:400">全量 · 不受上方周期筛选影响</span>
+        </div>
         <button v-if="byMonth.length" class="tag" @click="exportMonth">导出月度 CSV</button>
       </div>
 
