@@ -1,5 +1,6 @@
 {
-  "name": "ev-consumption",
+  "name": "ev-real-consumption",
+  "description": "用实际充电量与真实里程计算电动车百公里电耗与成本，不信车机估算",
   "private": true,
   "version": "1.0.0",
   "type": "module",
