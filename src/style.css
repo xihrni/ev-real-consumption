@@ -286,6 +286,24 @@ button .ic, .btn .ic, .btn-sec .ic, .btn-danger .ic, .edit-link .ic { margin-rig
 .rec .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
 .miss { color: var(--orange); }
 
+/* ===== 按月分组折叠（充电记录列表） ===== */
+.month-group + .month-group { border-top: 1px solid var(--border); }
+.month-head {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  padding: 10px 2px; background: transparent; border: none;
+  font-family: inherit; font-size: 13.5px; font-weight: 600;
+  color: var(--text); cursor: pointer; text-align: left;
+}
+.month-head:hover { color: var(--brand-strong); }
+.month-head .caret { flex: none; color: var(--text-faint); transition: transform 0.15s ease; }
+.month-head .caret.open { transform: rotate(90deg); }
+.month-head .month-meta {
+  margin-left: auto; white-space: nowrap;
+  font-size: 12px; font-weight: 500; color: var(--text-faint);
+}
+.month-body { padding-bottom: 10px; }
+.month-body .rec:last-child { margin-bottom: 0; }
+
 /* ===== Empty ===== */
 .empty {
   text-align: center; color: var(--text-faint); font-size: 13.5px;
@@ -593,6 +611,11 @@ button .ic, .btn .ic, .btn-sec .ic, .btn-danger .ic, .edit-link .ic { margin-rig
   .rec .ts { font-size: 15px; }
   .rec .meta, .rec .note-line, .rec .why { font-size: 13.5px; }
   .rec .metrics { font-size: 14px; gap: 9px 14px; }
+
+  /* 月份分组标题同步放大 */
+  .month-head { padding: 12px 2px; font-size: 14.5px; }
+  .month-head .month-meta { font-size: 12.5px; }
+  .month-head .caret { width: 16px; height: 16px; }
 
   .rpt-table {
     border-radius: 14px;

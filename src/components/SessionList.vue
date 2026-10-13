@@ -1,17 +1,109 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useAppStore } from '../store/useAppStore'
-import { fmtTs, fmtNum, fmtDuration } from '../utils/format'
+import { fmtTs, fmtNum, fmtDuration, round } from '../utils/format'
 import type { ChargeSession, Segment } from '../types'
-import { ClipboardList, Pencil, Trash2 } from 'lucide-vue-next'
+import { ClipboardList, Pencil, Trash2, ChevronRight } from 'lucide-vue-next'
 
 const store = useAppStore()
 const emit = defineEmits<{ edit: [string]; remove: [string] }>()
 
-const items = computed(() => {
+interface Row {
+  s: ChargeSession
+  seg: Segment
+}
+
+/** 全部记录，按时间倒序（最新在前） */
+const items = computed<Row[]>(() => {
   const { segs, sorted } = store.computed
   return sorted.map((s, i) => ({ s, seg: segs[i] as Segment })).reverse()
 })
+
+// ===== 状态筛选 =====
+
+type StatusFilter = 'all' | 'todo' | 'ok'
+const filter = ref<StatusFilter>('all')
+
+/** 需要用户配合处理的状态：待补全、异常 */
+function needsAction(st: Segment['status']) {
+  return st === 'pending' || st === 'err'
+}
+
+const todoCount = computed(() => items.value.filter((x) => needsAction(x.seg.status)).length)
+
+const filterOpts = computed<{ key: StatusFilter; label: string }[]>(() => [
+  { key: 'all', label: `全部 ${items.value.length}` },
+  { key: 'todo', label: todoCount.value ? `待处理 ${todoCount.value}` : '待处理' },
+  { key: 'ok', label: '已测算' }
+])
+
+const filtered = computed<Row[]>(() => {
+  if (filter.value === 'all') return items.value
+  if (filter.value === 'ok') return items.value.filter((x) => x.seg.status === 'ok')
+  return items.value.filter((x) => needsAction(x.seg.status))
+})
+
+// ===== 按月分组 =====
+
+const groups = computed(() => {
+  const map = new Map<string, Row[]>()
+  for (const it of filtered.value) {
+    // ts 是 datetime-local 字符串，前 7 位即 YYYY-MM
+    const mk = (it.s.ts || '').slice(0, 7) || '未知'
+    if (!map.has(mk)) map.set(mk, [])
+    map.get(mk)!.push(it)
+  }
+  // items 已是倒序，Map 的插入顺序天然保持「新月份在前」
+  return Array.from(map, ([month, list]) => {
+    let M = 0
+    let E = 0
+    for (const x of list) {
+      if (x.seg.status !== 'ok') continue
+      M += x.seg.dM || 0
+      E += x.seg.Econs || 0
+    }
+    return {
+      month,
+      items: list,
+      count: list.length,
+      // 该月真实电耗均值，仅作标题上的概览，不参与任何累计
+      avgReal: M > 0 ? round((E / M) * 100) : null
+    }
+  })
+})
+
+/** 已展开的月份集合；默认展开筛选结果里最近的 2 个月 */
+const expanded = ref<Set<string>>(new Set())
+
+function isOpen(m: string) {
+  return expanded.value.has(m)
+}
+function toggle(m: string) {
+  const next = new Set(expanded.value)
+  if (next.has(m)) next.delete(m)
+  else next.add(m)
+  expanded.value = next
+}
+function resetExpanded() {
+  expanded.value = new Set(groups.value.slice(0, 2).map((g) => g.month))
+}
+
+// 首屏数据到达后初始化一次
+let inited = false
+watch(
+  groups,
+  (gs) => {
+    if (!inited && gs.length) {
+      resetExpanded()
+      inited = true
+    }
+  },
+  { immediate: true }
+)
+// 切换筛选后重置，保证至少能看到最近的 2 个月
+watch(filter, resetExpanded)
+
+// ===== 展示辅助 =====
 
 function badgeText(st: Segment['status']) {
   return st === 'ok' ? '完整' : st === 'baseline' ? '基准' : st === 'pending' ? '待补全' : '异常'
@@ -35,50 +127,78 @@ function missing(s: ChargeSession) {
       <span class="tag">{{ store.sessions.length }} 条</span>
     </div>
 
+    <!-- 状态筛选：Tab 红点提示的待处理记录，可一键筛出 -->
+    <div v-if="store.sessions.length" class="seg-control plain">
+      <button
+        v-for="o in filterOpts"
+        :key="o.key"
+        :class="{ on: filter === o.key }"
+        @click="filter = o.key"
+      >{{ o.label }}</button>
+    </div>
+
     <div v-if="!items.length" class="empty">
       <div class="big"><ClipboardList :size="30" class="ic" /></div>
       还没有记录，先在上方新增一条充电账单。
     </div>
 
-    <transition-group v-else name="list" tag="div">
-      <div v-for="it in items" :key="it.s.id" class="rec">
-        <div class="top">
-          <span class="ts">{{ fmtTs(it.s.ts) }}</span>
-          <span class="badge" :class="it.seg.status">{{ badgeText(it.seg.status) }}</span>
-        </div>
-        <div class="meta">
-          度数 {{ fmtNum(it.s.E) }} kWh · 时长 {{ fmtDuration(it.s.T) }} · 金额
-          {{ fmtNum(it.s.C) }} 元
-          <span class="ctype-tag" :class="'ct-' + (it.s.ctype || 'other')">{{ ctypeText(it.s.ctype) }}</span>
-          <span v-if="missing(it.s).length" class="miss"> · 缺 {{ missing(it.s).join('/') }}</span>
-        </div>
-        <div v-if="it.s.note" class="note-line"><Pencil :size="12" class="ic ic-sub" />{{ it.s.note }}</div>
+    <div v-else-if="!groups.length" class="empty">
+      <div class="big"><ClipboardList :size="30" class="ic" /></div>
+      当前筛选条件下没有记录。<br />
+      <button class="btn-sec sm" style="margin-top:10px" @click="filter = 'all'">查看全部</button>
+    </div>
 
-        <div v-if="it.seg.status === 'ok'" class="metrics">
-          <span>真实电耗 <b>{{ it.seg.real }}</b> kWh/100km</span>
-          <span>均价 <b>{{ it.seg.price }}</b> 元</span>
-          <span>表显 <b>{{ it.seg.disp }}</b></span>
-          <span>功率 <b>{{ it.seg.power }}</b> kW</span>
-        </div>
-        <div v-else-if="it.seg.status === 'baseline'" class="metrics">
-          <span style="color: var(--brand-strong)">基准记录：已记录起点，本段消耗从下一段开始测算</span>
-        </div>
-        <div v-else-if="it.seg.status === 'pending'" class="metrics">
-          <span class="miss">缺里程 / 车显数据，点「补全」后可测算</span>
-        </div>
-        <div v-else class="why">
-          <div v-for="(w, i) in it.seg.why" :key="i">• {{ w }}</div>
-        </div>
+    <div v-else>
+      <div v-for="g in groups" :key="g.month" class="month-group">
+        <button class="month-head" @click="toggle(g.month)">
+          <ChevronRight :size="15" class="ic caret" :class="{ open: isOpen(g.month) }" />
+          <span class="month-name">{{ g.month }}</span>
+          <span class="month-meta">
+            {{ g.count }} 条<template v-if="g.avgReal != null"> · 均值 {{ g.avgReal.toFixed(1) }}</template>
+          </span>
+        </button>
 
-        <div class="actions">
-          <button class="btn-sec sm" style="padding:6px 12px;font-size:13px" @click="emit('edit', it.s.id)">
-            <Pencil :size="14" class="ic" />补全 / 编辑
-          </button>
-          <button class="btn-danger sm" style="padding:6px 12px;font-size:13px" @click="emit('remove', it.s.id)">
-            <Trash2 :size="14" class="ic" />删除
-          </button>
+        <div v-show="isOpen(g.month)" class="month-body">
+          <div v-for="it in g.items" :key="it.s.id" class="rec">
+            <div class="top">
+              <span class="ts">{{ fmtTs(it.s.ts) }}</span>
+              <span class="badge" :class="it.seg.status">{{ badgeText(it.seg.status) }}</span>
+            </div>
+            <div class="meta">
+              度数 {{ fmtNum(it.s.E) }} kWh · 时长 {{ fmtDuration(it.s.T) }} · 金额
+              {{ fmtNum(it.s.C) }} 元
+              <span class="ctype-tag" :class="'ct-' + (it.s.ctype || 'other')">{{ ctypeText(it.s.ctype) }}</span>
+              <span v-if="missing(it.s).length" class="miss"> · 缺 {{ missing(it.s).join('/') }}</span>
+            </div>
+            <div v-if="it.s.note" class="note-line"><Pencil :size="12" class="ic ic-sub" />{{ it.s.note }}</div>
+
+            <div v-if="it.seg.status === 'ok'" class="metrics">
+              <span>真实电耗 <b>{{ it.seg.real }}</b> kWh/100km</span>
+              <span>均价 <b>{{ it.seg.price }}</b> 元</span>
+              <span>表显 <b>{{ it.seg.disp }}</b></span>
+              <span>功率 <b>{{ it.seg.power }}</b> kW</span>
+            </div>
+            <div v-else-if="it.seg.status === 'baseline'" class="metrics">
+              <span style="color: var(--brand-strong)">基准记录：已记录起点，本段消耗从下一段开始测算</span>
+            </div>
+            <div v-else-if="it.seg.status === 'pending'" class="metrics">
+              <span class="miss">缺里程 / 车显数据，点「补全」后可测算</span>
+            </div>
+            <div v-else class="why">
+              <div v-for="(w, i) in it.seg.why" :key="i">• {{ w }}</div>
+            </div>
+
+            <div class="actions">
+              <button class="btn-sec sm" style="padding:6px 12px;font-size:13px" @click="emit('edit', it.s.id)">
+                <Pencil :size="14" class="ic" />补全 / 编辑
+              </button>
+              <button class="btn-danger sm" style="padding:6px 12px;font-size:13px" @click="emit('remove', it.s.id)">
+                <Trash2 :size="14" class="ic" />删除
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-    </transition-group>
+    </div>
   </section>
 </template>
