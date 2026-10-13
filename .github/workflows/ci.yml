@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# 取消同一分支上尚未完成的旧运行，节省额度
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: 类型检查 + 单元测试 + 构建
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 安装前端依赖
+        run: npm ci
+
+      - name: 安装后端依赖
+        run: npm --prefix server ci
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: 单元测试
+        run: npm test
+
+      - name: 构建产物
+        run: npm run build
+
+      # 防回归：emptyOutDir 若被改回 false，dist/assets 会堆积历史 chunk。
+      # 这里断言产物目录干净（只有 index.html + 2 个 hash 资源）。
+      - name: 校验 dist 目录干净
+        run: |
+          count=$(ls dist/assets | wc -l)
+          echo "dist/assets 文件数: $count"
+          if [ "$count" -ne 2 ]; then
+            echo "::error::dist/assets 应为 2 个文件（1 个 js + 1 个 css），实际 $count 个。请检查 vite.config.ts 的 emptyOutDir 是否被改为 false。"
+            exit 1
+          fi
+          test -f dist/index.html || { echo "::error::缺少 dist/index.html"; exit 1; }
+          echo "✅ dist 目录干净"
+
+      - name: 上传构建产物（供调试）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+          if-no-files-found: ignore

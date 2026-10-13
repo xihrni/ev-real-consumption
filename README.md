@@ -2,7 +2,7 @@
 
 > 用**实际充入电量**和**实际里程**算真实百公里电耗与成本，不信车机估算。
 >
-> 线上：https://apc.llw2025.com　|　文档：[docs/](docs/00-文档索引.md)
+> 线上：https://apc.llw2025.com ｜ 文档：[docs/](docs/00-文档索引.md)
 
 ---
 
@@ -79,6 +79,9 @@ npm run dev:server   # 后端（另开一个终端）
 | `npm run build` | 构建前端产物到 `dist/` |
 | `npm run preview` | 本地预览构建产物 |
 | `npm start` | 启动后端（生产模式） |
+| `npm test` | 单元测试（vitest，44 个用例） |
+| `npm run test:watch` | 测试 watch 模式 |
+| `npm run typecheck` | TypeScript 类型检查（`tsc --noEmit`） |
 
 ### 环境变量
 
@@ -158,6 +161,12 @@ ev-app/
 │   ├── sw.js                  # Service Worker（缓存策略）
 │   ├── manifest.webmanifest   # PWA 清单
 │   ├── icon.svg / favicon.svg
+│
+├── tests/                     # ── 单元测试（vitest，44 个用例）
+│   ├── calc.test.ts           # 测算引擎：状态判定 / 充满退化 / 均价口径 / 除零 / 幂等
+│   └── format.test.ts         # 数值安全：Infinity 防护 / 舍入 / 格式化容错
+│
+├── .github/workflows/ci.yml   # CI：类型检查 + 单元测试 + 构建 + dist 干净度校验
 │
 └── docs/                      # ── 文档（14 篇）
     ├── 00-文档索引.md          # 从这里开始

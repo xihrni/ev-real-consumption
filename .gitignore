@@ -19,6 +19,12 @@ dist/
 # 临时目录（历史残留的调试脚本已清理）
 tmp/
 
+# 测试缓存（vitest 的 SSR 模块缓存，指向项目内）
+node_modules/.vitest/
+
+# 覆盖率报告（若日后启用 coverage）
+coverage/
+
 # 早期联调脚本（打 localhost:3000，已废弃）
 server/test_*.mjs
 server/verify_*.mjs

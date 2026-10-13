@@ -10,7 +10,10 @@
     "server": "npm --prefix server run dev",
     "build": "vite build",
     "preview": "vite preview --host",
-    "start": "npm --prefix server run start"
+    "start": "npm --prefix server run start",
+    "test": "node scripts/test.mjs",
+    "test:watch": "node scripts/test.mjs --watch",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "echarts": "^5.5.1",
@@ -22,6 +25,7 @@
     "@vitejs/plugin-vue": "^5.1.3",
     "typescript": "^5.5.4",
     "vite": "^5.4.3",
-    "vite-plugin-pwa": "^0.20.5"
+    "vite-plugin-pwa": "^0.20.5",
+    "vitest": "^2.1.9"
   }
 }
