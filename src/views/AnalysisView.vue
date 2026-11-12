@@ -444,7 +444,7 @@ function exportMonth() {
       <div class="card-head">
         <div class="card-title">
           <CalendarDays :size="17" class="ic ic-brand" />月度报表
-          <span class="card-sub" style="font-weight:400">全量 · 不受上方周期筛选影响</span>
+          <span class="card-sub" style="font-weight:400">全量<span class="sub-long"> · 不受上方周期筛选影响</span></span>
         </div>
         <button v-if="byMonth.length" class="tag" @click="exportMonth">导出月度 CSV</button>
       </div>
